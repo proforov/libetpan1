@@ -1,0 +1,840 @@
+From 36a2c2bd9a6ba55b9a6cd2f74bee70620b107370 Mon Sep 17 00:00:00 2001
+From: proforov <proforov@gmail.com>
+Date: Sun, 5 Jan 2014 01:18:52 +0400
+Subject: [PATCH] xoauth2 added
+
+---
+ config.h.in            |   3 +
+ configure              |  33 +++-
+ configure.in           |  25 +++
+ lib/staticopen.h       |   8 +
+ plugins/Makefile.am    |   8 +-
+ plugins/Makefile.in    |  18 +-
+ plugins/NTMakefile     |   4 +
+ plugins/makeinit.sh    |   2 +-
+ plugins/xoauth2.c      | 483 +++++++++++++++++++++++++++++++++++++++++++++++++
+ plugins/xoauth2_init.c |  47 +++++
+ 10 files changed, 625 insertions(+), 6 deletions(-)
+ create mode 100644 plugins/xoauth2.c
+ create mode 100644 plugins/xoauth2_init.c
+
+diff --git a/config.h.in b/config.h.in
+index 751debf..423cbfe 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -404,6 +404,9 @@
+ /* Link LOGIN Staticly */
+ #undef STATIC_LOGIN
+ 
++/* Link XOAUTH2 Staticly */
++#undef STATIC_XOAUTH2
++
+ /* Link NTLM Staticly */
+ #undef STATIC_NTLM
+ 
+diff --git a/configure b/configure
+index d20e6cd..f2c4ceb 100755
+--- a/configure
++++ b/configure
+@@ -852,6 +852,7 @@ enable_gss_mutexes
+ enable_plain
+ enable_anon
+ enable_login
++enable_xoauth2
+ enable_ntlm
+ enable_passdss
+ with_ldap
+@@ -1534,6 +1535,7 @@ Optional Features:
+   --enable-plain          enable PLAIN authentication yes
+   --enable-anon           enable ANONYMOUS authentication [yes]
+   --enable-login          enable unsupported LOGIN authentication [no]
++  --enable-xoauth2        enable unsupported XOAUTH2 authentication [no]
+   --enable-ntlm           enable unsupported NTLM authentication [no]
+   --enable-passdss        enable PASSDSS authentication (experimental) [no]
+   --enable-sql            enable SQL auxprop [no]
+@@ -13977,6 +13979,34 @@ else
+ $as_echo "disabled" >&6; }
+ fi
+ 
++# Check whether --enable-xoauth2 was given.
++if test "${enable_xoauth2+set}" = set; then
++  enableval=$enable_xoauth2; xoauth2=$enableval
++else
++  xoauth2=no
++fi
++
++{ $as_echo "$as_me:$LINENO: checking XOAUTH2" >&5
++$as_echo_n "checking XOAUTH2... " >&6; }
++if test "$xoauth2" != no; then
++  { $as_echo "$as_me:$LINENO: result: enabled" >&5
++$as_echo "enabled" >&6; }
++  SASL_MECHS="$SASL_MECHS libxoauth2.la"
++  if test "$enable_static" = yes; then
++    SASL_STATIC_SRCS="$SASL_STATIC_SRCS \$(top_srcdir)/plugins/xoauth2.c"
++    SASL_STATIC_OBJS="$SASL_STATIC_OBJS xoauth2.o"
++
++cat >>confdefs.h <<\_ACEOF
++#define STATIC_XOAUTH2 /**/
++_ACEOF
++
++  fi
++else
++  { $as_echo "$as_me:$LINENO: result: disabled" >&5
++$as_echo "disabled" >&6; }
++fi
++
++
+ # Check whether --enable-ntlm was given.
+ if test "${enable_ntlm+set}" = set; then
+   enableval=$enable_ntlm; ntlm=$enableval
+@@ -19151,7 +19181,8 @@ $debug ||
+ if test -n "$CONFIG_FILES"; then
+ 
+ 
+-ac_cr=''
++ac_cr='
++'
+ ac_cs_awk_cr=`$AWK 'BEGIN { print "a\rb" }' </dev/null 2>/dev/null`
+ if test "$ac_cs_awk_cr" = "a${ac_cr}b"; then
+   ac_cs_awk_cr='\\r'
+diff --git a/configure.in b/configure.in
+index 60fb154..8903a0c 100644
+--- a/configure.in
++++ b/configure.in
+@@ -618,6 +618,31 @@ else
+   AC_MSG_RESULT(disabled)
+ fi
+ 
++
++dnl XOAUTH2
++AC_ARG_ENABLE(xoauth2, [  --enable-xoauth2          enable unsupported XOAUTH2 authentication [[no]] ],
++  xoauth2=$enableval,
++  xoauth2=no)
++
++if test "$with_openssl" = no; then
++  AC_WARN([OpenSSL not found -- XOAUTH2 will be disabled])
++  xoauth2=no
++fi
++
++AC_MSG_CHECKING(XOAUTH2)
++if test "$xoauth2" != no; then
++  AC_MSG_RESULT(enabled)
++  SASL_MECHS="$SASL_MECHS libxoauth2.la"
++  if test "$enable_static" = yes; then
++    SASL_STATIC_SRCS="$SASL_STATIC_SRCS \$(top_srcdir)/plugins/xoauth2.c"
++    SASL_STATIC_OBJS="$SASL_STATIC_OBJS xoauth2.o"
++    AC_DEFINE(STATIC_XOAUTH2,[],[Link XOAUTH2 Staticly])
++  fi
++else
++  AC_MSG_RESULT(disabled)
++fi
++
++
+ dnl NTLM
+ AC_ARG_ENABLE(ntlm, [  --enable-ntlm           enable unsupported NTLM authentication [[no]] ],
+   ntlm=$enableval,
+diff --git a/lib/staticopen.h b/lib/staticopen.h
+index 4e50319..745af37 100644
+--- a/lib/staticopen.h
++++ b/lib/staticopen.h
+@@ -104,6 +104,10 @@ extern SPECIFIC_CLIENT_PLUG_INIT_PROTO( kerberos4 );
+ extern SPECIFIC_SERVER_PLUG_INIT_PROTO( login );
+ extern SPECIFIC_CLIENT_PLUG_INIT_PROTO( login );
+ #endif
++#ifdef STATIC_XOAUTH2
++extern SPECIFIC_SERVER_PLUG_INIT_PROTO( xoauth2 );
++extern SPECIFIC_CLIENT_PLUG_INIT_PROTO( xoauth2 );
++#endif
+ #ifdef STATIC_NTLM
+ extern SPECIFIC_SERVER_PLUG_INIT_PROTO( ntlm );
+ extern SPECIFIC_CLIENT_PLUG_INIT_PROTO( ntlm );
+@@ -167,6 +171,10 @@ _sasl_plug_rec _sasl_static_plugins[] = {
+ 	SPECIFIC_SERVER_PLUG_INIT( plain, "PLAIN" ),
+ 	SPECIFIC_CLIENT_PLUG_INIT( plain, "PLAIN" ),
+ #endif
++#ifdef STATIC_XOAUTH2
++	SPECIFIC_SERVER_PLUG_INIT( xoauth2, "XOAUTH2" ),
++	SPECIFIC_CLIENT_PLUG_INIT( xoauth2, "XOAUTH2" ),
++#endif
+ #ifdef STATIC_SRP
+ 	SPECIFIC_SERVER_PLUG_INIT( srp, "SRP" ),
+ 	SPECIFIC_CLIENT_PLUG_INIT( srp, "SRP" ),
+diff --git a/plugins/Makefile.am b/plugins/Makefile.am
+index b00915f..0b21955 100644
+--- a/plugins/Makefile.am
++++ b/plugins/Makefile.am
+@@ -64,7 +64,7 @@ common_sources = plugin_common.c plugin_common.h
+ 
+ sasldir = $(prefix)/lib/sasl2
+ sasl_LTLIBRARIES = @SASL_MECHS@
+-EXTRA_LTLIBRARIES = libplain.la libanonymous.la libkerberos4.la libcrammd5.la \
++EXTRA_LTLIBRARIES = libplain.la libxoauth2.la libanonymous.la libkerberos4.la libcrammd5.la \
+ 	libgs2.la libgssapiv2.la libdigestmd5.la liblogin.la libsrp.la libotp.la \
+ 	libscram.la libntlm.la libpassdss.la libsasldb.la libsql.la libldapdb.la
+ 
+@@ -72,6 +72,10 @@ libplain_la_SOURCES = plain.c plain_init.c $(common_sources)
+ libplain_la_DEPENDENCIES = $(COMPAT_OBJS)
+ libplain_la_LIBADD = $(PLAIN_LIBS) $(COMPAT_OBJS)
+ 
++libxoauth2_la_SOURCES = xoauth2.c xoauth2_init.c $(common_sources)
++libxoauth2_la_DEPENDENCIES = $(COMPAT_OBJS)
++libxoauth2_la_LIBADD = $(XOAUTH2_LIBS) $(COMPAT_OBJS)
++
+ libanonymous_la_SOURCES = anonymous.c anonymous_init.c $(common_sources)
+ libanonymous_la_DEPENDENCIES = $(COMPAT_OBJS)
+ libanonymous_la_LIBADD = $(COMPAT_OBJS)
+@@ -139,7 +143,7 @@ libsql_la_LIBADD = $(COMPAT_OBJS)
+ # Instructions for making the _init files
+ 
+ init_src=anonymous_init.c crammd5_init.c digestmd5_init.c scram_init.c gs2_init.c gssapiv2_init.c \
+-kerberos4_init.c login_init.c plain_init.c srp_init.c otp_init.c ntlm_init.c \
++kerberos4_init.c login_init.c plain_init.c xoauth2_init.c srp_init.c otp_init.c ntlm_init.c \
+ passdss_init.c sasldb_init.c sql_init.c ldapdb_init.c
+ 
+ 
+diff --git a/plugins/Makefile.in b/plugins/Makefile.in
+index 3ecf9b5..d831e5f 100644
+--- a/plugins/Makefile.in
++++ b/plugins/Makefile.in
+@@ -158,6 +158,8 @@ am_libpassdss_la_OBJECTS = passdss.lo passdss_init.lo $(am__objects_1)
+ libpassdss_la_OBJECTS = $(am_libpassdss_la_OBJECTS)
+ am_libplain_la_OBJECTS = plain.lo plain_init.lo $(am__objects_1)
+ libplain_la_OBJECTS = $(am_libplain_la_OBJECTS)
++am_libxoauth2_la_OBJECTS = xoauth2.lo xoauth2_init.lo $(am__objects_1)
++libxoauth2_la_OBJECTS = $(am_libxoauth2_la_OBJECTS)
+ am_libsasldb_la_OBJECTS = sasldb.lo sasldb_init.lo $(am__objects_1)
+ libsasldb_la_OBJECTS = $(am_libsasldb_la_OBJECTS)
+ am_libscram_la_OBJECTS = scram.lo scram_init.lo $(am__objects_1)
+@@ -188,6 +190,7 @@ SOURCES = $(libanonymous_la_SOURCES) $(libcrammd5_la_SOURCES) \
+ 	$(libldapdb_la_SOURCES) $(liblogin_la_SOURCES) \
+ 	$(libntlm_la_SOURCES) $(libotp_la_SOURCES) \
+ 	$(libpassdss_la_SOURCES) $(libplain_la_SOURCES) \
++    $(libxoauth2_la_SOURCES) \
+ 	$(libsasldb_la_SOURCES) $(libscram_la_SOURCES) \
+ 	$(libsql_la_SOURCES) $(libsrp_la_SOURCES)
+ DIST_SOURCES = $(libanonymous_la_SOURCES) $(libcrammd5_la_SOURCES) \
+@@ -196,6 +199,7 @@ DIST_SOURCES = $(libanonymous_la_SOURCES) $(libcrammd5_la_SOURCES) \
+ 	$(libldapdb_la_SOURCES) $(liblogin_la_SOURCES) \
+ 	$(libntlm_la_SOURCES) $(libotp_la_SOURCES) \
+ 	$(libpassdss_la_SOURCES) $(libplain_la_SOURCES) \
++    $(libxoauth2_la_SOURCES) \
+ 	$(libsasldb_la_SOURCES) $(libscram_la_SOURCES) \
+ 	$(libsql_la_SOURCES) $(libsrp_la_SOURCES)
+ ETAGS = etags
+@@ -372,11 +376,17 @@ sasldir = $(prefix)/lib/sasl2
+ sasl_LTLIBRARIES = @SASL_MECHS@
+ EXTRA_LTLIBRARIES = libplain.la libanonymous.la libkerberos4.la libcrammd5.la \
+ 	libgs2.la libgssapiv2.la libdigestmd5.la liblogin.la libsrp.la libotp.la \
+-	libscram.la libntlm.la libpassdss.la libsasldb.la libsql.la libldapdb.la
++	libscram.la libntlm.la libpassdss.la libsasldb.la libsql.la libldapdb.la \
++    libxoauth2.la
+ 
+ libplain_la_SOURCES = plain.c plain_init.c $(common_sources)
+ libplain_la_DEPENDENCIES = $(COMPAT_OBJS)
+ libplain_la_LIBADD = $(PLAIN_LIBS) $(COMPAT_OBJS)
++
++libxoauth2_la_SOURCES = xoauth2 xoauth2_init.c $(common_sources)
++libxoauth2_la_DEPENDENCIES = $(COMPAT_OBJS)
++libxoauth2_la_LIBADD = $(PLAIN_LIBS) $(COMPAT_OBJS)
++
+ libanonymous_la_SOURCES = anonymous.c anonymous_init.c $(common_sources)
+ libanonymous_la_DEPENDENCIES = $(COMPAT_OBJS)
+ libanonymous_la_LIBADD = $(COMPAT_OBJS)
+@@ -430,7 +440,7 @@ libsql_la_LIBADD = $(COMPAT_OBJS)
+ 
+ # Instructions for making the _init files
+ init_src = anonymous_init.c crammd5_init.c digestmd5_init.c scram_init.c gs2_init.c gssapiv2_init.c \
+-kerberos4_init.c login_init.c plain_init.c srp_init.c otp_init.c ntlm_init.c \
++kerberos4_init.c login_init.c plain_init.c xoauth2_init.c srp_init.c otp_init.c ntlm_init.c \
+ passdss_init.c sasldb_init.c sql_init.c ldapdb_init.c
+ 
+ CLEANFILES = $(init_src)
+@@ -523,6 +533,8 @@ libpassdss.la: $(libpassdss_la_OBJECTS) $(libpassdss_la_DEPENDENCIES)
+ 	$(LINK)  $(libpassdss_la_OBJECTS) $(libpassdss_la_LIBADD) $(LIBS)
+ libplain.la: $(libplain_la_OBJECTS) $(libplain_la_DEPENDENCIES) 
+ 	$(LINK)  $(libplain_la_OBJECTS) $(libplain_la_LIBADD) $(LIBS)
++libxoauth2.la: $(libxoauth2_la_OBJECTS) $(libxoauth2_la_DEPENDENCIES) 
++	$(LINK)  $(libxoauth2_la_OBJECTS) $(libxoauth2_la_LIBADD) $(LIBS)
+ libsasldb.la: $(libsasldb_la_OBJECTS) $(libsasldb_la_DEPENDENCIES) 
+ 	$(LINK)  $(libsasldb_la_OBJECTS) $(libsasldb_la_LIBADD) $(LIBS)
+ libscram.la: $(libscram_la_OBJECTS) $(libscram_la_DEPENDENCIES) 
+@@ -563,6 +575,8 @@ distclean-compile:
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/passdss_init.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/plain.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/plain_init.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xoauth2.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xoauth2_init.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/plugin_common.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sasldb.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sasldb_init.Plo@am__quote@
+diff --git a/plugins/NTMakefile b/plugins/NTMakefile
+index c024c7d..bd11eb9 100755
+--- a/plugins/NTMakefile
++++ b/plugins/NTMakefile
+@@ -84,6 +84,10 @@ saslLOGIN_sources = login.c login_init.c $(common_sources)
+ saslLOGIN_objs = login.obj login_init.obj $(common_objs)
+ saslLOGIN_out = saslLOGIN.dll saslLOGIN.exp saslLOGIN.lib
+ 
++saslXOAUTH2_sources = xoauth2.c xoauth2_init.c $(common_sources)
++saslXOAUTH2_objs = xoauth2.obj xoauth2_init.obj $(common_objs)
++saslXOAUTH2_out = saslxoauth2.dll saslxoauth2.exp saslLOGIN.lib
++
+ saslSCRAM_sources = scram.c scram_init.c $(common_sources)
+ saslSCRAM_objs = scram.obj scram_init.obj $(common_objs)
+ saslSCRAM_out = saslSCRAM.dll saslSCRAM.exp saslSCRAM.lib
+diff --git a/plugins/makeinit.sh b/plugins/makeinit.sh
+index cc65f7d..e24b5ee 100644
+--- a/plugins/makeinit.sh
++++ b/plugins/makeinit.sh
+@@ -1,5 +1,5 @@
+ # mechanism plugins
+-for mech in anonymous crammd5 digestmd5 scram gssapiv2 kerberos4 login ntlm otp passdss plain srp gs2; do
++for mech in anonymous crammd5 digestmd5 scram gssapiv2 kerberos4 login ntlm otp passdss plain xoauth2 srp gs2; do
+ 
+ echo "
+ #include <config.h>
+diff --git a/plugins/xoauth2.c b/plugins/xoauth2.c
+new file mode 100644
+index 0000000..31536d5
+--- /dev/null
++++ b/plugins/xoauth2.c
+@@ -0,0 +1,483 @@
++/* XOAUTH2 SASL plugin
++ * Applex Cao
++ * $Id: xoauth2.c,v 1.00 2013/04/16 15:05:19 mel Exp $
++ */
++/* 
++ * Copyright (c) 1998-2003 Carnegie Mellon University.  All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer. 
++ *
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in
++ *    the documentation and/or other materials provided with the
++ *    distribution.
++ *
++ * 3. The name "Carnegie Mellon University" must not be used to
++ *    endorse or promote products derived from this software without
++ *    prior written permission. For permission or any other legal
++ *    details, please contact  
++ *      Office of Technology Transfer
++ *      Carnegie Mellon University
++ *      5000 Forbes Avenue
++ *      Pittsburgh, PA  15213-3890
++ *      (412) 268-4387, fax: (412) 268-7395
++ *      tech-transfer@andrew.cmu.edu
++ *
++ * 4. Redistributions of any form whatsoever must retain the following
++ *    acknowledgment:
++ *    "This product includes software developed by Computing Services
++ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
++ *
++ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
++ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
++ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
++ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
++ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
++ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#include <config.h>
++#include <stdio.h>
++#include <string.h> 
++#include <sasl.h>
++#include <saslplug.h>
++
++#include "plugin_common.h"
++
++/*****************************  Common Section  *****************************/
++
++static const char plugin_id[] = "$Id: xoauth2.c,v 1.00 2013/04/16 15:05:19 mel Exp $";
++
++/*****************************  Server Section  *****************************/
++
++static int xoauth2_server_mech_new(void *glob_context __attribute__((unused)), 
++                 sasl_server_params_t *sparams,
++                 const char *challenge __attribute__((unused)),
++                 unsigned challen __attribute__((unused)),
++                 void **conn_context)
++{
++    /* holds state are in */
++    if (!conn_context) {
++    PARAMERROR( sparams->utils );
++    return SASL_BADPARAM;
++    }
++    
++    *conn_context = NULL;
++    
++    return SASL_OK;
++}
++
++static int xoauth2_server_mech_step(void *conn_context __attribute__((unused)),
++                  sasl_server_params_t *params,
++                  const char *clientin,
++                  unsigned clientinlen,
++                  const char **serverout,
++                  unsigned *serveroutlen,
++                  sasl_out_params_t *oparams)
++{
++    const char *author;
++    const char *authen;
++    const char *password;
++    unsigned password_len;
++    unsigned lup = 0;
++    int result;
++    char *passcopy; 
++    unsigned canon_flags = 0;
++
++    *serverout = NULL;
++    *serveroutlen = 0;
++    
++    /* should have received author-id NUL authen-id NUL password */
++    
++    /* get author */
++    author = clientin;
++    while ((lup < clientinlen) && (clientin[lup] != 0)) ++lup;
++    
++    if (lup >= clientinlen) {
++    SETERROR(params->utils, "Can only find author (no password)");
++    return SASL_BADPROT;
++    }
++    
++    /* get authen */
++    ++lup;
++    authen = clientin + lup;
++    while ((lup < clientinlen) && (clientin[lup] != 0)) ++lup;
++    
++    if (lup >= clientinlen) {
++    params->utils->seterror(params->utils->conn, 0,
++                "Can only find author/en (no password)");
++    return SASL_BADPROT;
++    }
++    
++    /* get password */
++    lup++;
++    password = clientin + lup;
++    while ((lup < clientinlen) && (clientin[lup] != 0)) ++lup;
++    
++    password_len = (unsigned) (clientin + lup - password);
++    
++    if (lup != clientinlen) {
++    SETERROR(params->utils,
++         "Got more data than we were expecting in the XOAUTH2 plugin\n");
++    return SASL_BADPROT;
++    }
++    
++    /* this kinda sucks. we need password to be null terminated
++       but we can't assume there is an allocated byte at the end
++       of password so we have to copy it */
++    passcopy = params->utils->malloc(password_len + 1);    
++    if (passcopy == NULL) {
++    MEMERROR(params->utils);
++    return SASL_NOMEM;
++    }
++    
++    strncpy(passcopy, password, password_len);
++    passcopy[password_len] = '\0';
++   
++    /* Canonicalize userid first, so that password verification is only
++     * against the canonical id */
++    if (!author || !*author) {
++    author = authen;
++    canon_flags = SASL_CU_AUTHZID;
++    } else if (strcmp(author, authen) == 0) {
++    /* While this isn't going to find out that <user> and <user>@<defaultdomain>
++       are the same thing, this is good enough for many cases */
++    canon_flags = SASL_CU_AUTHZID;
++    }
++
++    result = params->canon_user(params->utils->conn,
++                authen,
++                0,
++                SASL_CU_AUTHID | canon_flags,
++                oparams);
++    if (result != SASL_OK) {
++    _plug_free_string(params->utils, &passcopy);
++    return result;
++    }
++
++    /* verify password (and possibly fetch both authentication and
++       authorization identity related properties) - return SASL_OK
++       on success */
++    result = params->utils->checkpass(params->utils->conn,
++                      oparams->authid,
++                      oparams->alen,
++                      passcopy,
++                      password_len);
++    
++    _plug_free_string(params->utils, &passcopy);
++    
++    if (result != SASL_OK) {
++    params->utils->seterror(params->utils->conn, 0,
++                "Password verification failed");
++    return result;
++    }
++
++    /* Canonicalize and store the authorization ID */
++    /* We need to do this after calling verify_user just in case verify_user
++     * needed to get auxprops itself */
++    if (canon_flags == 0) {
++    const struct propval *pr;
++    int i;
++
++    pr = params->utils->prop_get(params->propctx);
++    if (!pr) {
++        return SASL_FAIL;
++    }
++
++    /* params->utils->checkpass() might have fetched authorization identity related properties
++       for the wrong user name. Free these values. */
++    for (i = 0; pr[i].name; i++) {
++        if (pr[i].name[0] == '*') {
++        continue;
++        }
++
++            if (pr[i].values) {
++            params->utils->prop_erase(params->propctx, pr[i].name);
++            }
++    }
++
++    result = params->canon_user(params->utils->conn,
++                    author,
++                    0,
++                    SASL_CU_AUTHZID,
++                    oparams);
++    if (result != SASL_OK) {
++        return result;
++    }
++    }
++    
++    /* set oparams */
++    oparams->doneflag = 1;
++    oparams->mech_ssf = 0;
++    oparams->maxoutbuf = 0;
++    oparams->encode_context = NULL;
++    oparams->encode = NULL;
++    oparams->decode_context = NULL;
++    oparams->decode = NULL;
++    oparams->param_version = 0;
++    
++    return SASL_OK;
++}
++
++static sasl_server_plug_t xoauth2_server_plugins[] = 
++{
++    {
++    "XOAUTH2",            /* mech_name */
++    0,              /* max_ssf */
++    SASL_SEC_NOANONYMOUS
++    | SASL_SEC_PASS_CREDENTIALS,    /* security_flags */
++    // SASL_FEAT_WANT_CLIENT_FIRST
++    // | SASL_FEAT_ALLOWS_PROXY,   /* features */
++    0, // it's from login.c
++    NULL,               /* glob_context */
++    &xoauth2_server_mech_new,     /* mech_new */
++    &xoauth2_server_mech_step,    /* mech_step */
++    NULL, /* mech_dispose */  // is NULL in plain.c
++    NULL,               /* mech_free */
++    NULL,               /* setpass */
++    NULL,               /* user_query */
++    NULL,               /* idle */
++    NULL,               /* mech_avail */
++    NULL                /* spare */
++    }
++};
++
++int xoauth2_server_plug_init(const sasl_utils_t *utils,
++               int maxversion,
++               int *out_version,
++               sasl_server_plug_t **pluglist,
++               int *plugcount)
++{
++    if (maxversion < SASL_SERVER_PLUG_VERSION) {
++    SETERROR(utils, "XOAUTH2 version mismatch");
++    return SASL_BADVERS;
++    }
++    
++    *out_version = SASL_SERVER_PLUG_VERSION;
++    *pluglist = xoauth2_server_plugins;
++    *plugcount = 1;  
++    
++    return SASL_OK;
++}
++
++/*****************************  Client Section  *****************************/
++
++typedef struct client_context {
++    char *out_buf;
++    unsigned out_buf_len;
++} client_context_t;
++
++static int xoauth2_client_mech_new(void *glob_context __attribute__((unused)),
++                 sasl_client_params_t *params,
++                 void **conn_context)
++{
++    client_context_t *text;
++    
++    /* holds state are in */
++    text = params->utils->malloc(sizeof(client_context_t));
++    if (text == NULL) {
++    MEMERROR( params->utils );
++    return SASL_NOMEM;
++    }
++    
++    memset(text, 0, sizeof(client_context_t));
++    
++    *conn_context = text;
++    
++    return SASL_OK;
++}
++
++static int xoauth2_client_mech_step(void *conn_context,
++                  sasl_client_params_t *params,
++                  const char *serverin __attribute__((unused)),
++                  unsigned serverinlen __attribute__((unused)),
++                  sasl_interact_t **prompt_need,
++                  const char **clientout,
++                  unsigned *clientoutlen,
++                  sasl_out_params_t *oparams)
++{
++    client_context_t *text = (client_context_t *) conn_context;
++    const char *user = NULL, *authid = NULL;
++    sasl_secret_t *password = NULL;
++    unsigned int free_password = 0; /* set if we need to free password */
++    int user_result = SASL_OK;
++    int auth_result = SASL_OK;
++    int pass_result = SASL_OK;
++    int result;
++    char *p;
++    
++    *clientout = NULL;
++    *clientoutlen = 0;
++    
++    /* doesn't really matter how the server responds */
++    
++    /* check if sec layer strong enough */
++    if (params->props.min_ssf > params->external_ssf) {
++    SETERROR( params->utils, "SSF requested of XOAUTH2 plugin");
++    return SASL_TOOWEAK;
++    }
++    
++    /* try to get the authid */    
++    if (oparams->authid == NULL) {
++    auth_result = _plug_get_authid(params->utils, &authid, prompt_need);
++    
++    if ((auth_result != SASL_OK) && (auth_result != SASL_INTERACT))
++        return auth_result;
++    }       
++    
++    /* try to get the userid */
++    if (oparams->user == NULL) {
++    user_result = _plug_get_userid(params->utils, &user, prompt_need);
++    
++    if ((user_result != SASL_OK) && (user_result != SASL_INTERACT))
++        return user_result;
++    }
++    
++    /* try to get the password */
++    if (password == NULL) {
++    pass_result = _plug_get_password(params->utils, &password,
++                     &free_password, prompt_need);
++    
++    if ((pass_result != SASL_OK) && (pass_result != SASL_INTERACT))
++        return pass_result;
++    }
++    
++    /* free prompts we got */
++    if (prompt_need && *prompt_need) {
++    params->utils->free(*prompt_need);
++    *prompt_need = NULL;
++    }
++    
++    /* if there are prompts not filled in */
++    if ((user_result == SASL_INTERACT) || (auth_result == SASL_INTERACT) ||
++    (pass_result == SASL_INTERACT)) {
++    /* make the prompt list */
++    result =
++        _plug_make_prompts(params->utils, prompt_need,
++                   user_result == SASL_INTERACT ?
++                   "Please enter your authorization name" : NULL,
++                   NULL,
++                   auth_result == SASL_INTERACT ?
++                   "Please enter your authentication name" : NULL,
++                   NULL,
++                   pass_result == SASL_INTERACT ?
++                   "Please enter your password" : NULL, NULL,
++                   NULL, NULL, NULL,
++                   NULL, NULL, NULL);
++    if (result != SASL_OK) goto cleanup;
++    
++    return SASL_INTERACT;
++    }
++    
++    if (!password) {
++    PARAMERROR(params->utils);
++    return SASL_BADPARAM;
++    }
++
++    if (!user || !*user) {
++    result = params->canon_user(params->utils->conn, authid, 0,
++                    SASL_CU_AUTHID | SASL_CU_AUTHZID, oparams);
++    }
++    else {
++    result = params->canon_user(params->utils->conn, user, 0,
++                    SASL_CU_AUTHZID, oparams);
++    if (result != SASL_OK) goto cleanup;
++    
++    result = params->canon_user(params->utils->conn, authid, 0,
++                    SASL_CU_AUTHID, oparams);
++    }
++    if (result != SASL_OK) goto cleanup;
++    
++    printf("%s %s\n", user, password->data);
++    
++    *clientoutlen = 20 + oparams->ulen+ password->len;
++    printf("length: %d\n", *clientoutlen);
++
++    /* remember the extra NUL on the end for stupid clients */
++    result = _plug_buf_alloc(params->utils, &(text->out_buf),
++                 &(text->out_buf_len), *clientoutlen + 1);
++    if (result != SASL_OK) goto cleanup;
++    
++    memset(text->out_buf, 0, *clientoutlen + 1);
++    p = text->out_buf;
++    
++    sprintf(p, "user=%s\001auth=Bearer %s\001\001",user, password->data );
++    
++    *clientout = text->out_buf;
++    
++    printf("clientout: %s\n", *clientout);
++    
++    /* set oparams */
++    oparams->doneflag = 1;
++    oparams->mech_ssf = 1;
++    oparams->maxoutbuf = 0;
++    oparams->encode_context = NULL;
++    oparams->encode = NULL;
++    oparams->decode_context = NULL;
++    oparams->decode = NULL;
++    oparams->param_version = 0;
++    
++    result = SASL_OK;
++
++  cleanup:
++    /* free sensitive info */
++    if (free_password) _plug_free_secret(params->utils, &password);
++    
++    return result;
++}
++
++static void xoauth2_client_mech_dispose(void *conn_context,
++                      const sasl_utils_t *utils)
++{
++    client_context_t *text = (client_context_t *) conn_context;
++    
++    if (!text) return;
++    
++    if (text->out_buf) utils->free(text->out_buf);
++    
++    utils->free(text);
++}
++
++static sasl_client_plug_t xoauth2_client_plugins[] = 
++{
++    {
++    "XOAUTH2",            /* mech_name */
++    0,              /* max_ssf */
++    SASL_SEC_NOACTIVE|SASL_SEC_NOANONYMOUS|SASL_SEC_NOPLAINTEXT|SASL_SEC_MUTUAL_AUTH,    /* security_flags */
++    SASL_FEAT_WANT_CLIENT_FIRST
++    | SASL_FEAT_ALLOWS_PROXY,   /* features */
++    NULL,               /* required_prompts */
++    NULL,               /* glob_context */
++    &xoauth2_client_mech_new,     /* mech_new */
++    &xoauth2_client_mech_step,    /* mech_step */
++    &xoauth2_client_mech_dispose, /* mech_dispose */
++    NULL,               /* mech_free */
++    NULL,               /* idle */
++    NULL,               /* spare */
++    NULL                /* spare */
++    }
++};
++
++int xoauth2_client_plug_init(sasl_utils_t *utils,
++               int maxversion,
++               int *out_version,
++               sasl_client_plug_t **pluglist,
++               int *plugcount)
++{
++    if (maxversion < SASL_CLIENT_PLUG_VERSION) {
++    SETERROR(utils, "XOAUTH2 version mismatch");
++    return SASL_BADVERS;
++    }
++    
++    *out_version = SASL_CLIENT_PLUG_VERSION;
++    *pluglist = xoauth2_client_plugins;
++    *plugcount = 1;
++    
++    return SASL_OK;
++}
+diff --git a/plugins/xoauth2_init.c b/plugins/xoauth2_init.c
+new file mode 100644
+index 0000000..e68d51e
+--- /dev/null
++++ b/plugins/xoauth2_init.c
+@@ -0,0 +1,47 @@
++
++#include <config.h>
++
++#include <string.h>
++#include <stdlib.h>
++#include <stdio.h>
++#ifndef macintosh
++#include <sys/stat.h>
++#endif
++#include <fcntl.h>
++#include <assert.h>
++
++#include <sasl.h>
++#include <saslplug.h>
++#include <saslutil.h>
++
++#include "plugin_common.h"
++
++#ifdef macintosh
++#ifdef SASL_MONOLITHIC
++#define sasl_server_plug_init xoauth2_sasl_server_plug_init
++#define sasl_client_plug_init xoauth2_sasl_client_plug_init
++#endif
++#include <sasl_plugin_decl.h>
++#endif
++
++#ifdef WIN32
++BOOL APIENTRY DllMain( HANDLE hModule, 
++                       DWORD  ul_reason_for_call, 
++                       LPVOID lpReserved
++                     )
++{
++    switch (ul_reason_for_call)
++    {
++        case DLL_PROCESS_ATTACH:
++        case DLL_THREAD_ATTACH:
++        case DLL_THREAD_DETACH:
++        case DLL_PROCESS_DETACH:
++            break;
++    }
++    return TRUE;
++}
++#endif
++
++SASL_CLIENT_PLUG_INIT( xoauth2 )
++// SASL_SERVER_PLUG_INIT( xoauth2 )
++
+-- 
+1.8.3.4 (Apple Git-47)
+

@@ -8,6 +8,7 @@ ARCHIVE_NAME=$ARCHIVE.tar.gz
 ARCHIVE_PATCH=$ARCHIVE.patch
 url=ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/$ARCHIVE_NAME
 patchfile=cyrus-2.1.25-libetpan.patch
+patchfile2=cyrus-2.1.25-libetpan-xoauth2-added.patch
 
 scriptdir="`pwd`"
 
@@ -69,6 +70,7 @@ echo "*** patching sources ***" > "$logfile" 2>&1
 
 cd "$srcdir/$ARCHIVE"
 patch -p1 < $current_dir/$patchfile
+patch -p1 < $current_dir/$patchfile2
 # patch source files
 cd "$srcdir/$ARCHIVE/include"
 sed -E 's/\.\/makemd5 /.\/makemd5i386 /' < Makefile.am > Makefile.am.new
@@ -144,7 +146,7 @@ for TARGET in $TARGETS; do
         export CFLAGS="${CPPFLAGS} -Os ${EXTRA_FLAGS}"
 
         OPENSSL="--with-openssl=$BUILD_DIR/openssl-1.0.0d/universal"
-        PLUGINS="--enable-otp=no --enable-digest=no --with-des=no --enable-login"
+        PLUGINS="--enable-otp=no --enable-digest=no --with-des=no --enable-login --enable-xoauth2"
         ./configure --host=${ARCH} --prefix=$PREFIX --enable-shared=no --enable-static=yes --with-pam=$BUILD_DIR/openpam-20071221/universal $PLUGINS >> "$logfile" 2>&1
         make -j 8 >> "$logfile" 2>&1
         if [[ "$?" != "0" ]]; then
