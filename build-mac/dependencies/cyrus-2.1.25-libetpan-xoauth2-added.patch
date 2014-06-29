@@ -695,10 +695,10 @@ index 0000000..31536d5
 +    }
 +    if (result != SASL_OK) goto cleanup;
 +    
-+    printf("%s %s\n", user, password->data);
++   //printf("%s %s\n", user, password->data);
 +    
 +    *clientoutlen = 20 + oparams->ulen+ password->len;
-+    printf("length: %d\n", *clientoutlen);
++    //printf("length: %d\n", *clientoutlen);
 +
 +    /* remember the extra NUL on the end for stupid clients */
 +    result = _plug_buf_alloc(params->utils, &(text->out_buf),
@@ -712,7 +712,7 @@ index 0000000..31536d5
 +    
 +    *clientout = text->out_buf;
 +    
-+    printf("clientout: %s\n", *clientout);
++    //printf("clientout: %s\n", *clientout);
 +    
 +    /* set oparams */
 +    oparams->doneflag = 1;
